@@ -20,7 +20,7 @@ def test_combine_maps_labels_and_deduplicates(tmp_path: Path):
     }).to_csv(second, index=False)
     # Add a real row that shares text with the first dataset's fake row, to check conflict removal.
     second_df = pd.read_csv(second)
-    second_df.loc[2, "article"] = "Official report is released"
+    second_df.loc[2, "article"] = "Duplicate story"
     second_df.loc[2, "class"] = "REAL"
     second_df.to_csv(second, index=False)
 
@@ -33,7 +33,7 @@ def test_combine_maps_labels_and_deduplicates(tmp_path: Path):
     )
     result = pd.read_csv(output)
     assert set(result["label"]) == {"FAKE", "REAL"}
-    assert not result["text"].str.casefold().eq("official report is released").any()
+    assert not result["text"].str.casefold().eq("duplicate story").any()
     assert report["conflicting_rows_removed"] == 2
     assert report["duplicate_rows_removed"] == 1
 
