@@ -118,7 +118,7 @@ export default function App() {
         </div>
         <div className="warning result-warning"><strong>Interpret with care</strong><p>{result.caveat}</p></div>
         <div className="gemini-row"><div><strong>✦ Ask Gemini for contextual analysis</strong><small>Optional AI commentary, not independent verification.</small></div><button className="outline" disabled={geminiBusy} onClick={analyzeWithGemini}>{geminiBusy ? "Thinking..." : "Analyze with Gemini"}</button></div>
-        {gemini && <article className="panel gemini-result"><div className="eyebrow">GEMINI COMMENTARY</div><p>{gemini.analysis}</p><small>{gemini.caveat}</small></article>}
+        {gemini && <article className="panel gemini-result"><div className="eyebrow">GEMINI COMMENTARY</div><p>{gemini.analysis}</p>{gemini.sources?.length > 0 && <div className="source-list"><strong>Web sources returned by Gemini</strong>{gemini.sources.map((source, index) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{index + 1}. {source.title}</a>)}</div>}<small>{gemini.caveat}</small></article>}
       </section>}
     </main>
     <footer><div className="brand"><span className="logo">◉</span><span>truth<span>lens</span></span></div><p>Built for careful reading, not automatic verdicts.</p><small>LEARNING PROJECT · 0.1</small></footer>
