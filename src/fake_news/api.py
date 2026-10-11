@@ -118,7 +118,8 @@ def create_app(model_path: str | Path | None = None) -> Flask:
         )
         request_body = json.dumps({
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1200}
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1200},
+            "tools": [{"google_search": {}}]
         }).encode("utf-8")
         req = Request(endpoint, data=request_body, headers={"Content-Type": "application/json"}, method="POST")
         try:
@@ -126,13 +127,23 @@ def create_app(model_path: str | Path | None = None) -> Flask:
                 result = json.loads(response.read().decode("utf-8"))
             candidates = result.get("candidates", [])
             parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
-            analysis = "\\n".join(part.get("text", "") for part in parts if part.get("text"))
+            analysis = "\n".join(part.get("text", "") for part in parts if part.get("text"))
             if not analysis:
                 return jsonify({"error": "Gemini returned no text. Try again or inspect the API configuration."}), 502
+            metadata = candidates[0].get("groundingMetadata", {}) if candidates else {}
+            sources = []
+            for chunk in metadata.get("groundingChunks", []):
+                web_item = chunk.get("web", {})
+                uri = web_item.get("uri")
+                if uri and uri.startswith(("https://", "http://")):
+                    source = {"title": web_item.get("title") or uri, "url": uri}
+                    if source not in sources:
+                        sources.append(source)
             return jsonify({
                 "analysis": analysis,
                 "model": model_name,
-                "caveat": "AI-generated commentary can be wrong. It is not an independent fact-check; verify each claim using reliable external sources."
+                "sources": sources,
+                "caveat": "Gemini may use web search grounding, but sources may not support every sentence. Open and assess each source independently; this is not a definitive fact-check."
             })
         except HTTPError as exc:
             if exc.code in (400, 401, 403, 404):
