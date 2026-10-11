@@ -10,7 +10,6 @@ import joblib
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 
-# Support `python -m fake_news.train` after installing the package or adding src to PYTHONPATH.
 from fake_news.data import load_dataset
 from fake_news.model import build_model
 
@@ -20,7 +19,18 @@ def train(dataset_path: str, model_path: str, report_path: str, test_size: float
     if not 0.1 <= test_size <= 0.5:
         raise ValueError("test_size must be between 0.1 and 0.5")
 
-    # Stratification keeps both labels represented, when sample counts allow it.
+    # Ensure each class can be represented in both partitions before splitting.
+    class_counts = frame["label"].value_counts()
+    if (class_counts < 2).any():
+        raise ValueError("Each label needs at least two examples for a train/test split.")
+    test_rows = max(2, int(round(len(frame) * test_size)))
+    train_rows = len(frame) - test_rows
+    if test_rows < frame["label"].nunique() or train_rows < frame["label"].nunique():
+        raise ValueError(
+            "Dataset is too small for the requested test split. Add more examples per label "
+            "or choose a different test-size."
+        )
+
     train_text, test_text, train_labels, test_labels = train_test_split(
         frame["text"],
         frame["label"],
