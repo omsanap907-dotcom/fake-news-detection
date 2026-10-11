@@ -47,7 +47,7 @@ export default function App() {
     try {
       const response = await fetch(API + "/api/gemini-analysis", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: file ? "" : text })
+        body: JSON.stringify({ text: file ? (result?.extracted_text || "") : text })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gemini analysis failed.");
