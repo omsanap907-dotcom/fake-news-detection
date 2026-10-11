@@ -1,18 +1,18 @@
 # Fake News Detection — Learning Project
 
-A small, explainable starter project for experimenting with text classification and misinformation signals. This is an educational prototype, not a fact-checking authority.
+An educational prototype for experimenting with news-text classification and misinformation signals. It is not a fact-checking authority.
 
-## What it does
+## Current capabilities
 
-- Validates a labeled CSV with `text` and `label` columns.
-- Trains a baseline TF-IDF + logistic regression classifier.
-- Evaluates on a held-out split with accuracy, per-class precision/recall/F1, and a confusion matrix.
-- Classifies a headline/article text locally and prints model scores.
-- Includes input validation tests and a GitHub Actions test workflow.
+- Validates labeled CSV data, trains a TF-IDF + logistic-regression baseline, and reports held-out accuracy, per-class precision/recall/F1 and a confusion matrix.
+- Provides a Flask API for text analysis and selectable-text PDF uploads.
+- Flags selected sensational or urgency-oriented phrases as writing-style signals, never as proof that a claim is false.
+- Runs without a trained model for API/UI development; predictions appear once a model artifact is available.
+- Includes automated tests.
 
 ## Important limitation
 
-**A model prediction is not proof that a story is true or false.** This baseline learns patterns correlated with the labels in its training dataset. It may mistake writing style, publisher, topic, or dataset artifacts for truth. Verify claims with independent, trustworthy sources. Do not use this prototype for consequential decisions about people.
+A model prediction is not proof that a story is true or false. The model learns patterns correlated with the training labels and may learn topic, publisher, style, or dataset artifacts. Suspicious wording is not proof either. Verify claims with independent, reliable sources. Do not use this prototype for consequential decisions about people.
 
 ## Setup
 
@@ -24,52 +24,44 @@ cd fake-news-detection
 python -m venv .venv
 ```
 
-Activate the environment:
-
-- Windows PowerShell: `.venv\\Scripts\\Activate.ps1`
-- macOS/Linux: `source .venv/bin/activate`
-
-Install the project and test dependencies:
+Activate with PowerShell on Windows: `.venv\Scripts\Activate.ps1`; on macOS/Linux: `source .venv/bin/activate`.
 
 ```bash
 python -m pip install --upgrade pip
 pip install -e ".[test]"
 ```
 
-## Dataset
+## Dataset and training
 
-Put a CSV at `data/news.csv` with these columns:
+Place a CSV at `data/news.csv` with columns `text` and `label`; labels must be `FAKE` or `REAL` (case-insensitive). See `data/README.md`. Record dataset source and license; don't commit data unless redistribution is permitted.
 
-- `text`: headline or article text
-- `label`: `FAKE` or `REAL` (case-insensitive)
-
-See [`data/README.md`](data/README.md) for the schema. Record the dataset's source and license before using it. The project intentionally does not invent a training dataset. Don't commit a dataset unless its license permits it and you're comfortable making it public.
-
-## Train and evaluate
+Train/evaluate with:
 
 ```bash
 python -m fake_news.train --data data/news.csv
 ```
 
-This writes the model to `artifacts/fake_news_model.joblib` and the evaluation report to `artifacts/evaluation.json`. The report measures agreement with the dataset labels, not real-world factual truth. Inspect class-level metrics and possible duplicates/leakage rather than relying on accuracy alone.
+This writes `artifacts/fake_news_model.joblib` and `artifacts/evaluation.json`. Scores measure agreement with dataset labels, not real-world factual truth. Inspect class-wise metrics, duplicates, and source/topic leakage.
 
-To choose different paths:
-
-```bash
-python -m fake_news.train --data data/news.csv --model artifacts/model.joblib --report artifacts/report.json --test-size 0.2
-```
-
-## Predict
-
-After training:
+## Start API
 
 ```bash
-python -m fake_news.predict "Paste a headline or article excerpt here"
+python -m fake_news.api
 ```
 
-The output is a model prediction and class scores—not a verified fact-check. The scores are not guaranteed to be calibrated probabilities.
+Health: `GET http://127.0.0.1:5000/api/health`
 
-## Run tests
+Text analysis: `POST http://127.0.0.1:5000/api/analyze`, JSON body:
+
+```json
+{"text": "Paste an article or claim with at least 20 characters here."}
+```
+
+PDF analysis: `POST http://127.0.0.1:5000/api/analyze-pdf` as `multipart/form-data`, field name `file`. Limits: 8 MB, 40 pages, and 200,000 extracted characters. Password-protected files and scanned/image-only PDFs are not supported yet; OCR is a later step. Uploaded files are processed in memory rather than saved to disk.
+
+The API can run before the model is trained. Once a model exists at `artifacts/fake_news_model.joblib`, restart the API to load it. Model class scores are not guaranteed to be calibrated probabilities.
+
+## Tests
 
 ```bash
 pytest -q
@@ -77,7 +69,7 @@ pytest -q
 
 ## Roadmap
 
-1. Establish a reproducible baseline and understand its failure cases.
-2. Add a local user interface after the training pipeline is reliable.
-3. Compare models and test for duplicate/source/topic leakage.
-4. Explore evidence retrieval and source/context signals with transparent citations and human review.
+1. Add a React UI.
+2. Optionally add OCR for scanned PDFs with resource limits.
+3. Add optional Gemini-generated summaries while keeping the API key server-side.
+4. Add evidence retrieval with source citations and human review. Never conflate generated commentary with verified evidence.
