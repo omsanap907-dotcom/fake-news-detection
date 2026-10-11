@@ -15,7 +15,7 @@ An educational prototype for experimenting with news-text classification and mis
 - Serves text-analysis and PDF-upload endpoints from Flask.
 - Extracts selectable PDF text in memory, with upload/page/character limits.
 - Flags a small set of rhetorical phrases as style signals.
-- Provides a responsive React UI, result cards, optional local-browser history, and a button for Gemini contextual analysis.
+- Provides a responsive React UI, result cards, optional local-browser history, and a button for Gemini contextual analysis with optional Google Search grounding links.
 - Gemini is optional and its API key is read only by the backend from an environment variable.
 - Works without a trained model for UI development, but cannot produce ML predictions until a model artifact exists.
 
