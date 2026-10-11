@@ -34,3 +34,11 @@ def test_rejects_wrong_pdf_extension():
 def test_phrase_scanner_is_not_truth_detector():
     flags = suspicious_language("Scientists confirm a shocking truth. Wake up!")
     assert {item["category"] for item in flags} >= {"sensationalism", "unverified_authority"}
+
+
+def test_gemini_endpoint_without_configuration(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    client = create_app("missing.joblib").test_client()
+    response = client.post("/api/gemini-analysis", json={"text": "A sufficiently long sample news article to inspect."})
+    assert response.status_code == 503
+    assert "GEMINI_API_KEY" in response.get_json()["error"]
