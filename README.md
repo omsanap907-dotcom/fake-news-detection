@@ -46,6 +46,22 @@ python -m fake_news.train --data data/news.csv
 
 This writes `artifacts/fake_news_model.joblib` and `artifacts/evaluation.json`. The metrics measure agreement with dataset labels, not real-world truth. Review per-class metrics and check for duplicates and source/topic leakage.
 
+### Combine two datasets into a hybrid CSV
+
+The helper normalizes two source files to `text,label`, removes exact-text duplicates, and excludes text that has conflicting labels. It does not guess unknown labels, because datasets may use different label meanings.
+
+```powershell
+python -m fake_news.prepare_data --first data/source_one.csv --second data/source_two.csv --output data/hybrid_news.csv
+```
+
+If the source files use different column names or label values, specify them explicitly. For example:
+
+```powershell
+python -m fake_news.prepare_data --first data/source_one.csv --second data/source_two.csv --first-text-col title --first-label-col verdict --second-text-col article --second-label-col label --first-fake-label false --first-real-label true --second-fake-label 0 --second-real-label 1 --output data/hybrid_news.csv
+```
+
+Only use the numeric mapping in this example if the second dataset's documentation confirms that `0` means fake and `1` means real. Some datasets use the opposite mapping. Record both datasets' names, licenses, and label definitions before training.
+
 ## Start the API
 
 From the repository root, with the virtual environment active:
