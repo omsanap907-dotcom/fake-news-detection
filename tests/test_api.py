@@ -1,0 +1,44 @@
+from io import BytesIO
+from fake_news.api import create_app, suspicious_language
+
+def test_health_without_model(tmp_path):
+    client = create_app(tmp_path / "missing.joblib").test_client()
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.get_json()["model_loaded"] is False
+
+def test_requires_minimum_text():
+    client = create_app("missing.joblib").test_client()
+    response = client.post("/api/analyze", json={"text": "short"})
+    assert response.status_code == 400
+
+def test_analysis_without_model_still_reports_signals():
+    client = create_app("missing.joblib").test_client()
+    response = client.post("/api/analyze", json={
+        "text": "Shocking truth! Share immediately before it gets deleted. This claim needs checking."
+    })
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["model_available"] is False
+    assert body["prediction"] is None
+    assert len(body["suspicious_language"]) >= 2
+    assert "do not establish factual truth" in body["caveat"]
+
+def test_rejects_wrong_pdf_extension():
+    client = create_app("missing.joblib").test_client()
+    response = client.post("/api/analyze-pdf",
+        data={"file": (BytesIO(b"not a pdf"), "article.txt")},
+        content_type="multipart/form-data")
+    assert response.status_code == 415
+
+def test_phrase_scanner_is_not_truth_detector():
+    flags = suspicious_language("Scientists confirm a shocking truth. Wake up!")
+    assert {item["category"] for item in flags} >= {"sensationalism", "unverified_authority"}
+
+
+def test_gemini_endpoint_without_configuration(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    client = create_app("missing.joblib").test_client()
+    response = client.post("/api/gemini-analysis", json={"text": "A sufficiently long sample news article to inspect."})
+    assert response.status_code == 503
+    assert "GEMINI_API_KEY" in response.get_json()["error"]

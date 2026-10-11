@@ -1,83 +1,130 @@
-# Fake News Detection — Learning Project
+# Fake News Detection — TruthLens Learning Project
 
-A small, explainable starter project for experimenting with text classification and misinformation signals. This is an educational prototype, not a fact-checking authority.
+An educational prototype for experimenting with news-text classification and misinformation signals. It is not a fact-checking authority.
 
-## What it does
+## Project structure
 
-- Validates a labeled CSV with `text` and `label` columns.
-- Trains a baseline TF-IDF + logistic regression classifier.
-- Evaluates on a held-out split with accuracy, per-class precision/recall/F1, and a confusion matrix.
-- Classifies a headline/article text locally and prints model scores.
-- Includes input validation tests and a GitHub Actions test workflow.
+- `src/fake_news/`: Python data validation, TF-IDF + logistic regression model, training, prediction, PDF extraction, and Flask API.
+- `frontend/`: React + Vite interface for text and PDF analysis.
+- `tests/`: Python tests for data validation, model, API, and PDF handling.
+- `.github/workflows/tests.yml`: CI for Python tests and frontend production build.
 
-## Important limitation
+## What works in this branch
 
-**A model prediction is not proof that a story is true or false.** This baseline learns patterns correlated with the labels in its training dataset. It may mistake writing style, publisher, topic, or dataset artifacts for truth. Verify claims with independent, trustworthy sources. Do not use this prototype for consequential decisions about people.
+- Validates labeled CSV data and trains/evaluates a baseline classifier.
+- Serves text-analysis and PDF-upload endpoints from Flask.
+- Extracts selectable PDF text in memory, with upload/page/character limits.
+- Flags a small set of rhetorical phrases as style signals.
+- Provides a responsive React UI, result cards, optional local-browser history, and a button for Gemini contextual analysis with optional Google Search grounding links.
+- Gemini is optional and its API key is read only by the backend from an environment variable.
+- Works without a trained model for UI development, but cannot produce ML predictions until a model artifact exists.
 
-## Setup
+## Important limitations
+
+A model prediction is not proof that a story is true or false. The classifier learns correlations in the training dataset and may learn source, topic, style, duplicate, or other dataset artifacts. The phrase scanner is deliberately simple and cannot establish truth. Gemini output can also be wrong. Verify claims against independent, reliable sources; do not use this prototype for consequential decisions about people.
+
+## Python setup
 
 Requires Python 3.10 or newer.
 
-```bash
-git clone https://github.com/omsanap907-dotcom/fake-news-detection.git
-cd fake-news-detection
+```powershell
 python -m venv .venv
-```
-
-Activate the environment:
-
-- Windows PowerShell: `.venv\\Scripts\\Activate.ps1`
-- macOS/Linux: `source .venv/bin/activate`
-
-Install the project and test dependencies:
-
-```bash
+.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -e ".[test]"
 ```
 
-## Dataset
+If PowerShell blocks environment activation, use `.venv\Scripts\python.exe -m pip install -e ".[test]"` and run tools with `.venv\Scripts\python.exe`.
 
-Put a CSV at `data/news.csv` with these columns:
+## Dataset and training
 
-- `text`: headline or article text
-- `label`: `FAKE` or `REAL` (case-insensitive)
+Place a CSV at `data/news.csv` with `text` and `label` columns. Labels must be `FAKE` or `REAL` (case-insensitive). See `data/README.md`. Check the dataset source and license before downloading, using, or redistributing it. The repository does not ship a real dataset.
 
-See [`data/README.md`](data/README.md) for the schema. Record the dataset's source and license before using it. The project intentionally does not invent a training dataset. Don't commit a dataset unless its license permits it and you're comfortable making it public.
-
-## Train and evaluate
-
-```bash
+```powershell
 python -m fake_news.train --data data/news.csv
 ```
 
-This writes the model to `artifacts/fake_news_model.joblib` and the evaluation report to `artifacts/evaluation.json`. The report measures agreement with the dataset labels, not real-world factual truth. Inspect class-level metrics and possible duplicates/leakage rather than relying on accuracy alone.
+This writes `artifacts/fake_news_model.joblib` and `artifacts/evaluation.json`. The metrics measure agreement with dataset labels, not real-world truth. Review per-class metrics and check for duplicates and source/topic leakage.
 
-To choose different paths:
+### Combine two datasets into a hybrid CSV
 
-```bash
-python -m fake_news.train --data data/news.csv --model artifacts/model.joblib --report artifacts/report.json --test-size 0.2
+The helper normalizes two source files to `text,label`, removes exact-text duplicates, and excludes text that has conflicting labels. It does not guess unknown labels, because datasets may use different label meanings.
+
+```powershell
+python -m fake_news.prepare_data --first data/source_one.csv --second data/source_two.csv --output data/hybrid_news.csv
 ```
 
-## Predict
+If the source files use different column names or label values, specify them explicitly. For example:
 
-After training:
-
-```bash
-python -m fake_news.predict "Paste a headline or article excerpt here"
+```powershell
+python -m fake_news.prepare_data --first data/source_one.csv --second data/source_two.csv --first-text-col title --first-label-col verdict --second-text-col article --second-label-col label --first-fake-label false --first-real-label true --second-fake-label 0 --second-real-label 1 --output data/hybrid_news.csv
 ```
 
-The output is a model prediction and class scores—not a verified fact-check. The scores are not guaranteed to be calibrated probabilities.
+Only use the numeric mapping in this example if the second dataset's documentation confirms that `0` means fake and `1` means real. Some datasets use the opposite mapping. Record both datasets' names, licenses, and label definitions before training.
 
-## Run tests
+## Start the API
 
-```bash
+From the repository root, with the virtual environment active:
+
+```powershell
+python -m fake_news.api
+```
+
+Health endpoint: `GET http://127.0.0.1:5000/api/health`
+
+Text endpoint: `POST http://127.0.0.1:5000/api/analyze`, JSON body:
+
+```json
+{"text":"A news article or claim of at least 20 characters"}
+```
+
+PDF endpoint: `POST http://127.0.0.1:5000/api/analyze-pdf` using `multipart/form-data`, field name `file`. Current limits: 8 MB, 40 pages, and 200,000 extracted characters. Password-protected PDFs and scanned/image-only PDFs are not supported yet; OCR is future work. The API returns extracted PDF text to the client so the optional Gemini action can use it; be mindful of sensitive documents.
+
+## Optional Gemini analysis
+
+Create a server-side environment variable before starting Flask. Never place the key in React or commit it to GitHub.
+
+PowerShell for the current terminal:
+
+```powershell
+$env:GEMINI_API_KEY="YOUR_API_KEY_HERE"
+$env:GEMINI_MODEL="gemini-2.5-flash"
+python -m fake_news.api
+```
+
+The model name can be changed using `GEMINI_MODEL`. Without `GEMINI_API_KEY`, the Gemini endpoint returns a clear configuration error; the rest of the app continues to work. Requests require internet access and are subject to the provider's availability, quotas, and terms.
+
+## Run React
+
+Open a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite (normally `http://localhost:5173`). The frontend uses `http://127.0.0.1:5000` by default. To override it, create `frontend/.env.local` with:
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:5000
+```
+
+Build the frontend for production with `npm run build`.
+
+## Tests
+
+From the repository root:
+
+```powershell
 pytest -q
 ```
 
+GitHub Actions also builds the React frontend and runs Python tests on pushes and pull requests.
+
 ## Roadmap
 
-1. Establish a reproducible baseline and understand its failure cases.
-2. Add a local user interface after the training pipeline is reliable.
-3. Compare models and test for duplicate/source/topic leakage.
-4. Explore evidence retrieval and source/context signals with transparent citations and human review.
+- OCR for scanned PDFs with resource limits.
+- Evidence retrieval with source citations and claim-level comparisons.
+- Better dataset provenance, duplicate checks, leakage-aware evaluation, and robustness testing.
+- Deployment configuration, authentication/rate limits if hosted publicly, and privacy review.
