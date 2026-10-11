@@ -1,7 +1,10 @@
 """Local Flask API for the educational fake-news text classifier."""
 from __future__ import annotations
+import json
 import os
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import joblib
@@ -89,7 +92,56 @@ def create_app(model_path: str | Path | None = None) -> Flask:
         body["pdf"] = {"filename": Path(uploaded.filename).name,
                        "page_count": extracted["page_count"],
                        "character_count": extracted["character_count"]}
+        body["extracted_text"] = extracted["text"]
         return jsonify(body)
+
+    @app.post("/api/gemini-analysis")
+    def gemini_analysis():
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            return jsonify({"error": "Gemini is not configured. Set GEMINI_API_KEY in the backend environment; never put it in React."}), 503
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or not isinstance(payload.get("text"), str):
+            return jsonify({"error": "Send JSON with a string 'text' field. For PDF analysis, use the extracted_text returned by the PDF endpoint."}), 400
+        text = payload["text"].strip()
+        if len(text) < 20:
+            return jsonify({"error": "Please provide at least 20 characters for contextual analysis."}), 400
+        if len(text) > 80_000:
+            return jsonify({"error": "Gemini analysis is limited to 80,000 characters per request."}), 413
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        prompt = (
+            "Analyze the following news text carefully. Do not claim to have verified facts from the text alone. "
+            "Return a concise plain-text report with these headings: Main claims; Checkable details; Potential rhetoric or uncertainty; "
+            "What independent evidence to seek; Limitations. Distinguish statements from evidence and do not invent sources. "
+            "If a claim may be current, say it requires up-to-date independent verification.\n\nNEWS TEXT:\n" + text
+        )
+        request_body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1200}
+        }).encode("utf-8")
+        req = Request(endpoint, data=request_body, headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urlopen(req, timeout=35) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            candidates = result.get("candidates", [])
+            parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+            analysis = "\\n".join(part.get("text", "") for part in parts if part.get("text"))
+            if not analysis:
+                return jsonify({"error": "Gemini returned no text. Try again or inspect the API configuration."}), 502
+            return jsonify({
+                "analysis": analysis,
+                "model": model_name,
+                "caveat": "AI-generated commentary can be wrong. It is not an independent fact-check; verify each claim using reliable external sources."
+            })
+        except HTTPError as exc:
+            if exc.code in (400, 401, 403, 404):
+                return jsonify({"error": "Gemini rejected the request. Check the API key, enabled API, model name, and account quota."}), 502
+            return jsonify({"error": f"Gemini service returned HTTP {exc.code}."}), 502
+        except (URLError, TimeoutError):
+            return jsonify({"error": "Could not reach Gemini. Check the server's internet connection and try again."}), 502
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+            return jsonify({"error": "Gemini returned an unexpected response."}), 502
 
     @app.errorhandler(413)
     def too_large(_error):
