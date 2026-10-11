@@ -11,8 +11,8 @@ def test_combine_maps_labels_and_deduplicates(tmp_path: Path):
     second = tmp_path / "second.csv"
     output = tmp_path / "hybrid.csv"
     pd.DataFrame({
-        "headline": ["Claim A is false", "Official report is released", "Duplicate story"],
-        "truth": ["false", "true", "false"],
+        "headline": ["Claim A is false", "Official report is released", "Duplicate story", "City publishes transport schedule"],
+        "truth": ["false", "true", "false", "true"],
     }).to_csv(first, index=False)
     pd.DataFrame({
         "article": ["claim a is false", "Another fabricated claim", "Conflicting duplicate"],
